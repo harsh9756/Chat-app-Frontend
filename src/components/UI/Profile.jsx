@@ -68,7 +68,7 @@ export default function Profile() {
         if (JSON.stringify(userData) !== JSON.stringify(newUserData) && newUserData.name && newUserData.username && newUserData.email && validateEmail(newUserData.email)) {
             e.preventDefault();
             try {
-                const response = await axios.post('http://localhost:8080/user/api/edit',
+                const response = await axios.post(`${import.meta.env.VITE_API_URL}/user/api/edit`,
                     {
                         "old": { ...userData },
                         "update": { ...newUserData },
