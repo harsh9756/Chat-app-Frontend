@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.elev{
+    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;}
+.icons{
+    scale: 1.2;
+}
+.icons:hover{
+    scale: 1.1;
+    box-shadow: 0px 0px 5px white;
+}
+div::-webkit-scrollbar{
+    display: none;
+}
+body,html{
+    overflow-x: hidden;
+}
