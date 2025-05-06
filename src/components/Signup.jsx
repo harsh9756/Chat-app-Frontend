@@ -29,7 +29,6 @@ export default function Signup() {
             try {
                 const response = await axios.post(`${import.meta.env.VITE_API_URL}/user/api/register`, user);
                 if (response.status == 200) {
-                    console.log(response.data)
                     localStorage.setItem('token', response.data.token)
                     localStorage.setItem('userData', JSON.stringify(response.data.userData))
                     navigateTo('/app')

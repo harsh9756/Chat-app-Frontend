@@ -22,7 +22,6 @@ import { chatActions } from '../../store/ChatSlice';
 
 export default function SideBar() {
   const chatData = useSelector(state => state.chat)
-  console.log(chatData)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [msg, setMsg] = useState()
@@ -49,7 +48,6 @@ export default function SideBar() {
           }
         })
       if (response.status == 200) {
-        console.log("fullchat",response.data.fullChat)
         if (Array.isArray(response.data.fullChat) && response.data.fullChat.length > 0) {
           dispatch(chatActions.createChat(response.data.fullChat))
         }
@@ -69,7 +67,6 @@ export default function SideBar() {
     }
 
     socket.on("newChat", (newChat) => {
-      console.log("newchat",newChat)
       dispatch(chatActions.appendChat(newChat));
     });
 

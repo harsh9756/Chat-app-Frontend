@@ -20,7 +20,6 @@ const chatSlice = createSlice({
     },
     updateRead(state, action) {
       const chatIndex = state.findIndex((chat) => chat._id === action.payload);
-      console.log(chatIndex)
       if (chatIndex !== -1) {
         if (state[chatIndex].latestMessage) { 
           state[chatIndex].latestMessage.isRead = true;
