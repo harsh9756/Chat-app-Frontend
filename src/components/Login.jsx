@@ -35,7 +35,6 @@ export default function Login() {
                     navigateTo('/app');
                 }
             } catch (error) {
-                console.error(error);
             }
         };
         verifyToken();
@@ -57,7 +56,8 @@ export default function Login() {
                 handleToast("error", "Invalid login credentials");
             }
         } catch (error) {
-            handleToast("error", error.response?.data);
+            const errorMessage = error?.response?.data?.message || "An unknown error occurred.";
+            handleToast("error", errorMessage);
         }
         setIsLoading(false);
     }

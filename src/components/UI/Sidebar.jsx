@@ -54,8 +54,8 @@ export default function SideBar() {
           dispatch(chatActions.createChat(response.data.fullChat))
         }
       }
-      if (error.response.status == 404) {
-        setMsg(error.response.data.message)
+      if (error?.response.status == 404) {
+        setMsg(error?.response?.data.message)
       }
     }
     catch (error) {
@@ -99,8 +99,8 @@ export default function SideBar() {
       }
     }
     catch (error) {
-      if (error.response.status == 404) {
-        setMsg(error.response.data.message)
+      if (error.response?.status == 404) {
+        setMsg(error?.response?.data.message)
       }
     }
   }
