@@ -31,6 +31,7 @@ export default function ChatArea() {
   const isOnline = onlineUsers.includes(data.Rid)
 
   async function handleSendMessage() {
+    setMessageText("");
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/msg`,
@@ -46,7 +47,6 @@ export default function ChatArea() {
         }
       );
       if (response.status === 200) {
-        setMessageText("");
         dispatch(chatActions.updateChat(response.data))
         setMsgs((msgs) => [{ ...response.data }, ...msgs]);
       }
