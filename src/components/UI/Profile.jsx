@@ -1,18 +1,16 @@
-import { Button, IconButton, Snackbar, TextField } from '@mui/material';
 import { motion, useAnimationControls } from 'framer-motion';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
-import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
-import ArrowBackIosNewOutlinedIcon from '@mui/icons-material/ArrowBackIosNewOutlined';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import AvatarText from '../miscellaneous/AvatarText';
+import { ChevronLeft, Edit2, X, User, AtSign, Mail } from 'lucide-react';
 import axios from 'axios';
-
+import AvatarText from '../miscellaneous/AvatarText';
 import Toaster from '../miscellaneous/Toaster';
 
 export default function Profile() {
+    const controls = useAnimationControls();
+    const navigateTo = useNavigate();
+    const dark = useSelector((state) => state.theme.dark);
 
     useEffect(() => {
         controls.set('initial');
@@ -20,138 +18,140 @@ export default function Profile() {
     }, []);
 
     const [toast, setToast] = useState({ state: false, severity: "success", message: "" });
+    const handleToast = (type, message) => setToast({ state: true, severity: type, message });
 
-    const handleToast = (type,message) => {
-        setToast({ "state": true, "severity": type,message });
-    };
+    // FIX: safe parse
+    const safeUser = () => { try { return JSON.parse(localStorage.getItem('userData')); } catch { return {}; } };
+    const [userData, setUserData] = useState(safeUser());
+    const [newUserData, setNewUserData] = useState({ ...userData });
+    const [editing, setEditing] = useState({ name: false, username: false, email: false });
 
-    const [editing, setEditing] = useState({
-        "name": false,
-        "username": false,
-        "email": false,
-    })
+    const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-    const navigateTo = useNavigate();
-    const controls = useAnimationControls();
-    const dark = useSelector((state) => state.theme.dark);
-    const iconColor = dark ? 'text-white' : '';
+    function handleEdit(field) {
+        setNewUserData({ ...userData });
+        setEditing({ name: false, username: false, email: false, [field]: true });
+    }
 
-    const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('userData')))
-    const [newUserData, setNewUserData] = useState({ ...userData })
+    function handleCancel(field) {
+        setNewUserData({ ...userData });
+        setEditing(prev => ({ ...prev, [field]: false }));
+    }
+
+    // FIX: e.preventDefault() always called
+    async function handleSave(e) {
+        e.preventDefault();
+        setEditing({ name: false, email: false, username: false });
+
+        if (JSON.stringify(userData) === JSON.stringify(newUserData)) {
+            handleToast("success", "No changes were made."); return;
+        }
+        if (!newUserData.name || !newUserData.username || !newUserData.email) {
+            handleToast("error", "Fields cannot be empty."); return;
+        }
+        if (!validateEmail(newUserData.email)) {
+            handleToast("error", "Invalid email address."); return;
+        }
+        try {
+            const response = await axios.post(
+                `${import.meta.env.VITE_API_URL}/user/api/edit`,
+                { old: { ...userData }, update: { ...newUserData } },
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            if (response.status === 202) {
+                handleToast("success", "Profile updated!");
+                localStorage.setItem('userData', JSON.stringify(response.data.userData));
+                localStorage.setItem('token', response.data.token);
+                setUserData(response.data.userData);
+            }
+        } catch (_) {
+            handleToast("error", "Username or email already in use.");
+        }
+    }
 
     function goBack() {
         controls.start('fadeOut');
-        setTimeout(() => {
-            navigateTo('..');
-        }, 300);
-    }
-    const handleInputChange = (event) => {
-        const { name, value } = event.target;
-        setNewUserData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    function handleEdit(field) {
-        setNewUserData({ ...userData })
-        setEditing((prev) => ({ ...prev, [field]: !prev[field] }))
+        setTimeout(() => navigateTo('..'), 300);
     }
 
-    const validateEmail = (email) => {
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailPattern.test(email);
-    };
+    const isEditing = editing.name || editing.username || editing.email;
+    const borderClass = dark ? 'border-[#1e2230]' : 'border-gray-200';
 
-    async function handleSave(e) {
-        setEditing({ "name": false, "email": false, "username": false })
-        if (JSON.stringify(userData) !== JSON.stringify(newUserData) && newUserData.name && newUserData.username && newUserData.email && validateEmail(newUserData.email)) {
-            e.preventDefault();
-            try {
-                const response = await axios.post(`${import.meta.env.VITE_API_URL}/user/api/edit`,
-                    {
-                        "old": { ...userData },
-                        "update": { ...newUserData },
-                    },
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        }
-                    });
-                if (response.status == 202) {
-                    handleToast("success", "Profile Updates Successfully!")
-                    localStorage.setItem('userData', JSON.stringify(response.data.userData))
-                    localStorage.setItem('token', response.data.token)
-                    setUserData(response.data.userData)
-                }
-            } catch (error) {
-                handleToast("error", "Username/Email already in Use!")
-            }
-        }
-        else {
-            if (JSON.stringify(userData) === JSON.stringify(newUserData)) {
-                handleToast("success", "No changes were made")
-            } else {
-                handleToast("error", "Fields can not be empty!")
-            }
-        }
-    }
     return (
         <motion.div
-            variants={{
-                initial: { x: 20, opacity: 0 },
-                fadein: { x: 0, opacity: 1 },
-                fadeOut: { x: 20, opacity: 0 }
-            }}
-            transition={{ duration: 0.5 }}
+            variants={{ initial: { x: 15, opacity: 0 }, fadein: { x: 0, opacity: 1 }, fadeOut: { x: 15, opacity: 0 } }}
+            transition={{ duration: 0.3 }}
             animate={controls}
-            className={`${dark ? 'text-white' : 'text-black'} flex h-[100dvh] flex-col rounded-lg p-1 sm:absolute sm:top-0 lg:static z-20 sm:w-full flex-grow`}>
+            className={`flex flex-col h-[100dvh] flex-grow sm:absolute sm:top-0 sm:w-full lg:static z-20 ${dark ? 'bg-[#0d0f14]' : 'bg-gray-50'}`}
+        >
             <Toaster toast={toast} setToast={setToast} />
-            <div className={`${dark ? 'text-white bg-gray-950' : 'text-black bg-gray-100'} h-screen elev rounded-md p-4`}>
-                <div className="flex items-center">
-                    <IconButton onClick={goBack} >
-                        <ArrowBackIosNewOutlinedIcon className={`${iconColor} md:hidden`} />
-                    </IconButton>
-                    <h1 className="text-xl font-semibold ml-2">Your Profile</h1>
+
+            {/* Header */}
+            <div className={`flex items-center gap-3 px-4 py-3 border-b ${dark ? 'bg-[#151820] border-[#1e2230]' : 'bg-white border-gray-200'}`}>
+                <button onClick={goBack}
+                    className={`p-1.5 rounded-lg md:hidden ${dark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    <ChevronLeft size={18} />
+                </button>
+                <span className={`text-sm font-semibold flex-1 ${dark ? 'text-white' : 'text-gray-900'}`}>Profile</span>
+                {isEditing && (
+                    <button onClick={handleSave}
+                        className="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                        Save changes
+                    </button>
+                )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+                {/* Avatar section */}
+                <div className={`flex flex-col items-center py-10 px-6 border-b ${dark ? 'bg-[#151820] border-[#1e2230]' : 'bg-white border-gray-200'}`}>
+                    <AvatarText name={userData.name || '?'} profile={true} />
+                    <h2 className={`text-lg font-semibold mt-4 mb-1 tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+                        {userData.name}
+                    </h2>
+                    <p className="text-sm text-gray-500">@{userData.username}</p>
                 </div>
-                <div className="flex flex-col items-center lg:mt-4 sm:mt-8">
-                    <div className="relative">
-                        <AvatarText name={userData.name} profile={true} />
-                    </div>
-                    <div className="mt-4 text-center w-full max-w-md">
-                        <div className="flex items-center my-4">
-                            <div className="ml-4 mt-4 flex-grow">
-                                {editing.name ? <TextField id="outlined-basic" size='small' variant="outlined" onChange={handleInputChange} name='name' value={newUserData.name} /> :
-                                    <h2 className="text-lg font-semibold">{userData.name}</h2>
-                                }
-                                <p className="text-sm text-gray-500">This is not your username or pin. This name will be visible to people you chat with.</p>
+
+                {/* Fields */}
+                <div className="px-4 pt-2 pb-8">
+                    {[
+                        { icon: <User size={14} />, label: 'Display name', field: 'name', value: userData.name },
+                        { icon: <AtSign size={14} />, label: 'Username', field: 'username', value: userData.username },
+                        { icon: <Mail size={14} />, label: 'Email address', field: 'email', value: userData.email },
+                    ].map(({ icon, label, field, value }) => (
+                        <div key={field} className={`flex items-center gap-3 py-4 border-b ${borderClass}`}>
+                            <span className="text-gray-500 flex-shrink-0">{icon}</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-gray-500 text-xs font-medium mb-0.5">{label}</p>
+                                {editing[field] ? (
+                                    <input
+                                        autoFocus
+                                        value={newUserData[field] || ''}
+                                        onChange={e => setNewUserData(p => ({ ...p, [field]: e.target.value }))}
+                                        className={`text-sm w-full rounded-lg px-2.5 py-1.5 outline-none border transition-colors
+                                            ${dark
+                                                ? 'bg-[#0d0f14] border-[#2a2d35] focus:border-blue-500 text-white'
+                                                : 'bg-gray-50 border-gray-200 focus:border-blue-400 text-gray-900'
+                                            }`}
+                                    />
+                                ) : (
+                                    <p className={`text-sm truncate ${dark ? 'text-gray-200' : 'text-gray-800'}`}>{value}</p>
+                                )}
                             </div>
-                            <IconButton onClick={() => handleEdit("name")}>
-                                <EditOutlinedIcon className={`${iconColor}`} />
-                            </IconButton>
+                            <div className="flex-shrink-0">
+                                {editing[field] ? (
+                                    <button onClick={() => handleCancel(field)}
+                                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors">
+                                        <X size={14} />
+                                    </button>
+                                ) : (
+                                    <button onClick={() => handleEdit(field)}
+                                        className={`p-1.5 rounded-lg transition-colors ${dark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                                        <Edit2 size={14} />
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex ml-4 mt-4 items-center my-4">
-                            <PersonOutlinedIcon />
-                            <h2 className="text-lg font-semibold">Username-</h2>
-                            {editing.username ? <TextField id="outlined-basic" size='small' variant="outlined" onChange={handleInputChange} name='username' value={newUserData.username} /> :
-                                <p className="text-gray-500">{userData.username}</p>
-                            }
-                            <IconButton onClick={() => handleEdit("username")}>
-                                <EditOutlinedIcon className={`${iconColor}`} />
-                            </IconButton>
-                        </div>
-                        <div className="flex ml-4  items-center my-4">
-                            <EmailOutlinedIcon />
-                            <h2 className="text-lg font-semibold">Email-</h2>
-                            {editing.email ? <TextField id="outlined-basic" size='small' variant="outlined" onChange={handleInputChange} name='email' value={newUserData.email} /> :
-                                <p className="text-gray-500">{userData.email}</p>
-                            }
-                            <IconButton onClick={() => handleEdit("email")}>
-                                <EditOutlinedIcon className={`${iconColor}`} />
-                            </IconButton>
-                        </div>
-                        {(editing.name || editing.username || editing.email) && <Button onClick={handleSave} size='small' variant="contained">Save</Button>}
-                    </div>
+                    ))}
                 </div>
             </div>
         </motion.div>

@@ -1,188 +1,224 @@
-import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
-import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
-import LogoutIcon from '@mui/icons-material/Logout';
-import SearchIcon from '@mui/icons-material/Search';
-import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
-import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
-import { IconButton, Tooltip } from '@mui/material';
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
-
-import { useDispatch, useSelector } from 'react-redux'
-import { motion } from 'framer-motion'
+import { useDispatch, useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { themeActions } from '../../store/ThemeSlice';
-import ChatItem from '../Chat/ChatItem';
-import Modal from '../miscellaneous/Modal';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
-import AvatarText from '../miscellaneous/AvatarText';
-import { socket } from '../../Utils/socket';
+import { User, UserPlus, LogOut, Moon, Sun, Search, MessageSquare, X } from 'lucide-react';
+
+import { themeActions } from '../../store/ThemeSlice';
 import { chatActions } from '../../store/ChatSlice';
+import { socket } from '../../Utils/socket';
+import ChatItem from '../Chat/ChatItem';
+import AvatarText from '../miscellaneous/AvatarText';
 
 export default function SideBar() {
-  const chatData = useSelector(state => state.chat)
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [msg, setMsg] = useState()
-  const dark = useSelector(state => state.theme.dark)
-  const boxClasses = `p-1 flex rounded-lg  ${dark ? 'bg-gray-950' : 'bg-gray-100'}`
-  const iconColor = dark ? 'text-white' : '';
+    const chatData = useSelector(state => state.chat);
+    const dark = useSelector(state => state.theme.dark);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [name, setName] = useState('');
+    const [searchResult, setSearchResult] = useState(null);
+    const [searchError, setSearchError] = useState('');
+    const [filter, setFilter] = useState('');
+    const navigateTo = useNavigate();
+    const dispatch = useDispatch();
 
-  const navigateTo = useNavigate()
-  const dispatch = useDispatch()
-  function handleLogout() {
-    localStorage.clear()
-    navigateTo('/')
-  }
+    // FIX: safe JSON parse
+    function safeGetUser() {
+        try { return JSON.parse(localStorage.getItem('userData')); } catch { return null; }
+    }
 
-  async function handleCreateChat(id) {
-    setOpen(false)
-    setName("")
-    try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/chat/api/getAllChats`,
-        { "userId": id },
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-      if (response.status == 200) {
-        if (Array.isArray(response.data.fullChat) && response.data.fullChat.length > 0) {
-          dispatch(chatActions.createChat(response.data.fullChat))
+    // FIX: guard against duplicate socket connections
+    useEffect(() => {
+        if (!socket.connected) socket.connect();
+        socket.emit('register', safeGetUser()?._id);
+
+        const setData = (data) => dispatch(chatActions.updateChat(data));
+        const onNewChat = (newChat) => dispatch(chatActions.appendChat(newChat));
+        socket.on('newChat', onNewChat);
+        socket.on('newMessage', setData);
+
+        loadChats();
+
+        return () => {
+            socket.off('newChat', onNewChat);
+            socket.off('newMessage', setData);
+            socket.disconnect();
+        };
+    }, []);
+
+    async function loadChats() {
+        try {
+            const response = await axios.post(
+                `${import.meta.env.VITE_API_URL}/chat/api/getAllChats`, {},
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            if (response.status === 200 && Array.isArray(response.data.fullChat)) {
+                dispatch(chatActions.createChat(response.data.fullChat));
+            }
+        } catch (_) {}
+    }
+
+    async function handleCreateChat(id) {
+        setSearchOpen(false);
+        setName('');
+        setSearchResult(null);
+        setSearchError('');
+        try {
+            const response = await axios.post(
+                `${import.meta.env.VITE_API_URL}/chat/api/getAllChats`,
+                { userId: id },
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            if (response.status === 200 && Array.isArray(response.data.fullChat)) {
+                dispatch(chatActions.createChat(response.data.fullChat));
+            }
+        } catch (_) {}
+    }
+
+    async function handleSearchUser(e) {
+        e.preventDefault();
+        setSearchError('');
+        setSearchResult(null);
+        if (name === safeGetUser()?.username) {
+            setSearchError("That's your own username.");
+            return;
         }
-      }
-      if (error?.response.status == 404) {
-        setMsg(error?.response?.data.message)
-      }
-    }
-    catch (error) {
-    }
-  }
-  useEffect(() => {
-    socket.connect()
-
-    function setData(data) {
-      dispatch(chatActions.updateChat(data))
+        try {
+            const response = await axios.get(
+                `${import.meta.env.VITE_API_URL}/user/api/getSearchedUser?q=${name}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            if (response.status === 200) setSearchResult(response.data);
+        } catch (error) {
+            setSearchError(error.response?.data?.message || 'User not found.');
+        }
     }
 
-    socket.on("newChat", (newChat) => {
-      dispatch(chatActions.appendChat(newChat));
+    const filteredChats = chatData?.filter(chat => {
+        if (!filter) return true;
+        const me = safeGetUser();
+        const other = chat.users?.find(u => u.name !== me?.name);
+        return other?.name?.toLowerCase().includes(filter.toLowerCase());
     });
 
-    socket.on("newMessage", setData)
+    const bg = dark ? 'bg-[#151820]' : 'bg-white';
+    const border = dark ? 'border-[#1e2230]' : 'border-gray-200';
+    const inputBg = dark ? 'bg-[#0d0f14] border-[#2a2d35] text-white placeholder-gray-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400';
 
-    socket.emit("register", JSON.parse(localStorage.getItem("userData"))?._id)
-    handleCreateChat()
-    return () => socket.disconnect()
-  }, [])
-
-  async function handleSearchUser(e) {
-    e.preventDefault()
-    try {
-      if (name == JSON.parse(localStorage.getItem("userData")).username) {
-        setName("")
-        setMsg("You entered Your Username!")
-        return
-      }
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/api/getSearchedUser?q=${name}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-      if (response.status == 200) {
-        setMsg({ name: response.data.name, id: response.data._id })
-      }
-    }
-    catch (error) {
-      if (error.response?.status == 404) {
-        setMsg(error?.response?.data.message)
-      }
-    }
-  }
-
-  return (
-    <motion.nav initial={{ x: 15 }} animate={{ x: 0 }} transition={{ duration: 0.5 }} className={`h-[100dvh] px-1 sm:w-full md:w-1/3 lg:w-1/4 flex-col rounded-lg flex z-20`}>
-      <div className={`elev py-1 mt-2 ${boxClasses} justify-between`} >
-        <Modal open={open} setOpen={setOpen}>
-          <form onSubmit={handleSearchUser} className="p-4 md:p-5">
-            <label htmlFor="name" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Enter Username/Email</label>
-            <div className="flex items-center bg-gray-50 border border-gray-300 rounded-lg dark:bg-gray-600 dark:border-gray-500">
-              <input type="text" name="name" id="name" onChange={(e) => setName(e.target.value)} value={name}
-                className="my-2 focus:outline-none bg-transparent border-none text-gray-900 text-sm rounded-lg block w-full p-2.5 "
-                placeholder="example@example.com"
-                required />
-              <IconButton type='submit'>
-                <SearchIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              </IconButton>
-            </div>
-            {msg && msg !== "User not found" && msg !== "You entered Your Username!" ? (
-              <motion.div
-                whileTap={{ scale: 0.99 }}
-                onClick={() => handleCreateChat(msg.id)}
-                className="flex p-2 items-center"
-              >
-                <AvatarText className="mr-2 mt-1" name={msg.name} />
-                <div className="flex flex-grow gap-6 items-center">
-                  <p>{msg.name}</p>
-                  <IconButton>
-                    <ChatOutlinedIcon />
-                  </IconButton>
+    return (
+        <motion.nav
+            initial={{ x: -10, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className={`h-[100dvh] w-full md:w-1/3 lg:w-1/4 flex flex-col ${bg} border-r ${border} z-20`}
+        >
+            {/* Top bar */}
+            <div className={`flex items-center justify-between px-3 py-2.5 border-b ${border}`}>
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                        <MessageSquare size={15} className="text-blue-400" />
+                    </div>
+                    <span className={`text-sm font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>Convo</span>
                 </div>
-              </motion.div>
-            ) : (<p className="text-red-600 text-xl text-center mt-5">{msg}</p>)}
-          </form>
-        </Modal>
-        <div>
-          <Tooltip title="Profile">
-            <IconButton onClick={() => navigateTo('user/profile')} className='icons'>
-              <AccountCircleOutlinedIcon className={iconColor} />
-            </IconButton>
-          </Tooltip>
-        </div>
-        <div>
-          <Tooltip title="Add Friend">
-            <IconButton className='icons' onClick={() => setOpen(true)}>
-              <PersonAddAltOutlinedIcon className={iconColor} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Create Group">
-            <IconButton className='icons'>
-              <GroupAddOutlinedIcon className={iconColor} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Change Theme">
-            <IconButton className='icons' onClick={() => dispatch(themeActions.change())}>
-              <DarkModeOutlinedIcon className={iconColor} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Logout">
-            <IconButton className='icons' onClick={handleLogout}>
-              <LogoutIcon className={iconColor} />
-            </IconButton>
-          </Tooltip>
-        </div>
-      </div>
-      <div className={`elev my-2 ${boxClasses}`}>
-        <IconButton className='icons'><SearchOutlinedIcon className={iconColor} /></IconButton>
-        <input type="text" className={`focus:outline-none p-0 bg-transparent focus:border-none ${iconColor}`} placeholder='Search' />
-      </div>
-      <div id="full" className={`elev ${boxClasses} overflow-auto grow flex-col mb-2 pt-2`}>
-        {chatData?.map((chat, index) => {
-          return (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20, }}
-              animate={{ opacity: 1, y: 0, delay: 0.5 }}
-              transition={{ duration: 0.5, delay: index * 0.15 }}
-            >
-              <ChatItem chat={chat} />
-            </motion.div>
-          )
-        })}
-      </div>
-    </motion.nav >
-  );
-}
+                <div className="flex items-center gap-0.5">
+                    {[
+                        { icon: <User size={15} />, title: 'Profile', onClick: () => navigateTo('user/profile') },
+                        { icon: <UserPlus size={15} />, title: 'New conversation', onClick: () => setSearchOpen(true) },
+                        { icon: dark ? <Sun size={15} /> : <Moon size={15} />, title: 'Toggle theme', onClick: () => dispatch(themeActions.change()) },
+                        { icon: <LogOut size={15} />, title: 'Sign out', onClick: () => { localStorage.clear(); navigateTo('/'); } },
+                    ].map((btn, i) => (
+                        <button key={i} title={btn.title} onClick={btn.onClick}
+                            className={`p-1.5 rounded-lg transition-colors ${dark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
+                            {btn.icon}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
+            {/* Filter bar */}
+            <div className={`px-3 py-2 border-b ${border}`}>
+                <div className="relative">
+                    <Search size={13} className={`absolute left-3 top-1/2 -translate-y-1/2 ${dark ? 'text-gray-600' : 'text-gray-400'}`} />
+                    <input
+                        type="text" placeholder="Filter conversations…" value={filter}
+                        onChange={e => setFilter(e.target.value)}
+                        className={`w-full text-xs rounded-lg pl-8 pr-3 py-2 border outline-none transition-colors ${inputBg}`}
+                    />
+                </div>
+            </div>
+
+            {/* Chat list */}
+            <div className="flex-1 overflow-y-auto">
+                {filteredChats?.length === 0 && (
+                    <p className={`text-center text-xs mt-8 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>No conversations yet</p>
+                )}
+                {filteredChats?.map((chat, index) => (
+                    <motion.div key={chat._id || index}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: index * 0.04 }}>
+                        <ChatItem chat={chat} />
+                    </motion.div>
+                ))}
+            </div>
+
+            {/* New conversation modal */}
+            <AnimatePresence>
+                {searchOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                        onClick={() => setSearchOpen(false)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className={`w-full max-w-sm rounded-2xl p-5 border ${dark ? 'bg-[#151820] border-[#1e2230]' : 'bg-white border-gray-200'}`}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className={`text-sm font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>New conversation</h3>
+                                <button onClick={() => setSearchOpen(false)}
+                                    className={`p-1 rounded-lg ${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <X size={15} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSearchUser} className="flex gap-2 mb-3">
+                                <div className="relative flex-1">
+                                    <Search size={13} className={`absolute left-3 top-1/2 -translate-y-1/2 ${dark ? 'text-gray-600' : 'text-gray-400'}`} />
+                                    <input
+                                        type="text" placeholder="Username or email…" value={name} autoFocus
+                                        onChange={e => setName(e.target.value)}
+                                        className={`w-full text-sm rounded-lg pl-8 pr-3 py-2 border outline-none transition-colors ${inputBg}`}
+                                    />
+                                </div>
+                                <button type="submit"
+                                    className="bg-blue-500 hover:bg-blue-400 text-white text-sm font-medium px-3 rounded-lg transition-colors">
+                                    Search
+                                </button>
+                            </form>
+
+                            {searchError && <p className="text-red-400 text-xs mb-2">{searchError}</p>}
+
+                            {searchResult && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                                    onClick={() => handleCreateChat(searchResult._id)}
+                                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-colors ${dark ? 'bg-[#0d0f14] border-[#1e2230] hover:border-blue-500/40' : 'bg-gray-50 border-gray-200 hover:border-blue-300'}`}
+                                >
+                                    <AvatarText name={searchResult.name} />
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium ${dark ? 'text-white' : 'text-gray-900'}`}>{searchResult.name}</p>
+                                        <p className="text-xs text-gray-500">@{searchResult.username}</p>
+                                    </div>
+                                    <span className="text-blue-400 text-xs font-medium">Open →</span>
+                                </motion.div>
+                            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.nav>
+    );
+}
